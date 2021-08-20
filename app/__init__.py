@@ -1,13 +1,16 @@
-from flask import Flask, request, jsonify, safe_join
-from werkzeug.utils import secure_filename
-from image import create_directory, create_files, files_list
+from flask import Flask, request, jsonify, safe_join, send_from_directory
+from image import create_files, files_list, create_zip_file
 import os
 
 app = Flask(__name__)
 
 FILES_DIRECTORY = './files'
 MAX_CONTENT_LENGTH = 1000000
-create_directory(FILES_DIRECTORY)
+
+app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
+
+if not os.path.exists(FILES_DIRECTORY):
+    os.makedirs(FILES_DIRECTORY)
 
 # Rota POST com o endpoint /upload que terá a função de enviar um arquivo 
 # por formulário com o campo formulário nomeado "file", com o valor sendo o arquivo a ser enviado;
@@ -19,27 +22,23 @@ def upload_form():
     files_types =  ('image/png', 'image/jpg', 'image/gif')
 
     if len(files_list) == 0:
-        return {"message": "Envie pelo menos 1 arquivo."}, 406
+        return {"message": "Send at least 1 file."}, 406
 
     for f in files_list:
         received_file = files[f]
         received_file_type = received_file.mimetype
-        
+        filename = received_file.filename
+
+        if filename in os.listdir(FILES_DIRECTORY):
+            return {"message": f"{filename} file already exist"}, 409
+
 
         if received_file_type not in files_types:
             return {"message": f"{received_file_type} format file unsupported"}, 415
         
-
     uploaded_files = create_files(files, FILES_DIRECTORY)
-
-    filename = secure_filename(received_file.filename)
-    file_path = safe_join(FILES_DIRECTORY, filename)
-
-    if os.path.getsize(file_path) > MAX_CONTENT_LENGTH:
-        os.remove(file_path)
-        return {"message": "file size exceeded"}, 413
-
-    return jsonify(uploaded_files)
+    
+    return jsonify(uploaded_files), 201
 
 
 # Rota GET com o endpoint /files que irá listar todos os arquivos e 
@@ -63,10 +62,14 @@ def list_files_by_type(tipo: str):
 
 # Rota GET com o endpoint /download/<file_name> responsável 
 # por fazer o download do arquivo solicitado em file_name;
-@app.get('/download/<string:file_name>')
-def download_file(file_name):
-    return ''
 
+@app.get('/download/<string:file_name>')
+def download_file(file_name: str):
+
+    filename = safe_join(file_name)
+
+    return send_from_directory(directory='../files', path=filename, as_attachment=True), 200
+    
 
 # Rota GET com o endpoint /download-zip com query_params (file_type, compression_rate) 
 # para especificar o tipo de arquivo para baixar todos compactados e também a taxa de compressão.
@@ -74,6 +77,14 @@ def download_file(file_name):
 def download_dir_as_zip():
 
     file_type = request.args.get('file_type')
-    compression_rate = request.args.get('compression_rate')
+
+    try:
+        compression_rate = int(request.args.get('compression_rate'))
+    except TypeError:
+        compression_rate = 9
+
+    zip_file = create_zip_file('/tmp','./files',file_type,compression_rate)
     
-    return ''
+    download = send_from_directory(directory='/tmp', path=zip_file['filename'], as_attachment=True)
+    
+    return download, 200
