@@ -1,13 +1,12 @@
 from flask import Flask, request, jsonify, safe_join, send_from_directory
 from image import create_files, files_list, create_zip_file
+from werkzeug.exceptions import NotFound
 import os
 
 app = Flask(__name__)
 
 FILES_DIRECTORY = './files'
 MAX_CONTENT_LENGTH = 1000000
-
-app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
 
 if not os.path.exists(FILES_DIRECTORY):
     os.makedirs(FILES_DIRECTORY)
@@ -16,6 +15,11 @@ if not os.path.exists(FILES_DIRECTORY):
 # por formulário com o campo formulário nomeado "file", com o valor sendo o arquivo a ser enviado;
 @app.post('/upload')
 def upload_form():
+
+    content_length = request.content_length 
+
+    if content_length > MAX_CONTENT_LENGTH:
+        return {"message": "The data value transmitted exceeds the capacity limit."}, 413
 
     files_list = list(request.files)
     files = request.files
@@ -68,13 +72,21 @@ def download_file(file_name: str):
 
     filename = safe_join(file_name)
 
-    return send_from_directory(directory='../files', path=filename, as_attachment=True), 200
+    try: 
+        return send_from_directory(directory='../files', path=filename, as_attachment=True), 200
+    except NotFound:
+        return {"message": "file not found"}, 404
     
 
 # Rota GET com o endpoint /download-zip com query_params (file_type, compression_rate) 
 # para especificar o tipo de arquivo para baixar todos compactados e também a taxa de compressão.
 @app.get('/download-zip')
 def download_dir_as_zip():
+
+    files = files_list(FILES_DIRECTORY)
+
+    if len(files) == 0:
+        return {"message": "the directory is empty"}, 404
 
     file_type = request.args.get('file_type')
 

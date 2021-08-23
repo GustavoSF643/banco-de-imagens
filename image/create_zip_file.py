@@ -18,9 +18,9 @@ def create_zip_file(directory: str, directory_list: str,file_type: str=None, com
 
     files = os.listdir(directory_list)
 
-    zip_folder_name = f"zip_files_{str(datetime.now()).replace(' ', '_')}"
+    zip_folder_name = f'zip_{file_type}'
     zip_folder_path = safe_join(directory, zip_folder_name)
-    zip_folder = zipfile.ZipFile(zip_folder_path, 'x')
+    zip_folder = zipfile.ZipFile(zip_folder_path, 'w')
 
     for file in files:
         if file_type == None:
